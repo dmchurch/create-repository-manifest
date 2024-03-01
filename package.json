@@ -1,21 +1,21 @@
 {
-  "name": "typescript-action",
-  "description": "GitHub Actions TypeScript template",
+  "name": "create-repository-manifest",
+  "description": "",
   "version": "0.0.0",
-  "author": "",
+  "author": "dmchurch",
   "private": true,
-  "homepage": "https://github.com/actions/typescript-action",
+  "homepage": "https://github.com/dmchurch/create-repository-manifest",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/actions/typescript-action.git"
+    "url": "git+https://github.com/dmchurch/create-repository-manifest.git"
   },
   "bugs": {
-    "url": "https://github.com/actions/typescript-action/issues"
+    "url": "https://github.com/dmchurch/create-repository-manifest/issues"
   },
   "keywords": [
-    "actions",
-    "node",
-    "setup"
+    "repository",
+    "manifest",
+    "json"
   ],
   "exports": {
     ".": "./dist/index.js"
