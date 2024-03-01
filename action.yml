@@ -15,9 +15,12 @@ inputs:
   follow-symbolic-links:
     description: 'Whether to follow symlinks when creating the manifest'
     default: true
+  use-gitignore:
+    description: 'Use the root .gitignore file to exclude files from the manifest'
+    default: true
   manifest-path:
     description: 'The path to the manifest JSON to generate'
-    default: '/repository-manifest.json'
+    default: 'repository-manifest.json'
   summary-path:
     description: 'The path to a summary JSON to generate'
     required: false

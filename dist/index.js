@@ -5198,19 +5198,64 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.run = void 0;
 const core = __importStar(__nccwpck_require__(2186));
 const glob = __importStar(__nccwpck_require__(8090));
-const globOptions = {
-    followSymbolicLinks: core.getInput('follow-symbolic-links') !== 'FALSE'
-};
+// import * as io from '@actions/io'
+const fs = __importStar(__nccwpck_require__(7147));
+const path = __importStar(__nccwpck_require__(1017));
+const process = __importStar(__nccwpck_require__(7282));
 /**
  * The main function for the action.
  * @returns {Promise<void>} Resolves when the action is complete.
  */
 async function run() {
     try {
-        const globber = await glob.create(core.getInput('file-patterns'), globOptions);
-        for await (const file of globber.globGenerator()) {
-            core.debug(`Got file: ${file}`);
+        const input = {
+            filePatterns: core.getInput('file-patterns'),
+            followSymbolicLinks: core.getBooleanInput('follow-symbolic-links'),
+            useGitignore: core.getBooleanInput('use-gitignore'),
+            minify: core.getBooleanInput('minify'),
+            manifestPath: core.getInput('manifest-path'),
+            summaryPath: core.getInput('summary-path')
+        };
+        if (input.manifestPath?.startsWith('/')) {
+            input.manifestPath = input.manifestPath.slice(1);
         }
+        if (input.summaryPath?.startsWith('/')) {
+            input.summaryPath = input.summaryPath.slice(1);
+        }
+        const globOptions = {
+            followSymbolicLinks: input.followSymbolicLinks
+        };
+        let patterns = input.filePatterns;
+        const match = /^@((?:\.\/)?(?:[^\s/]+\/)*[^\s/]+\/?)\s*$/.exec(patterns);
+        if (match) {
+            const filename = match.groups?.[1];
+            if (filename && fs.existsSync(filename)) {
+                patterns = await fs.promises.readFile(filename, { encoding: 'utf-8' });
+                core.debug(`Loaded patterns from file ${filename}`);
+            }
+        }
+        if (input.useGitignore && fs.existsSync('.gitignore')) {
+            const ignores = await fs.promises.readFile('.gitignore', {
+                encoding: 'utf-8'
+            });
+            const commentRe = /^\s*#/;
+            for (const ignoreLine of ignores.replace(/\r/g, '').split('\n')) {
+                if (commentRe.test(ignoreLine))
+                    continue;
+                core.debug(`Adding !${ignoreLine} from .gitignore`);
+                patterns += `\n!${ignoreLine}`;
+            }
+        }
+        const globber = await glob.create(patterns, globOptions);
+        const base = process.cwd();
+        const files = {};
+        for await (const file of globber.globGenerator()) {
+            const relFile = path.relative(base, file);
+            core.debug(`Got file: ${relFile}`);
+            files[relFile] = null;
+        }
+        core.debug(`Found ${Object.keys(files).length} files, writing to ${input.manifestPath}`);
+        await fs.promises.writeFile(input.manifestPath, JSON.stringify({ files }, null, input.minify ? undefined : 4), { encoding: 'utf-8' });
     }
     catch (error) {
         // Fail the workflow run if an error occurs
@@ -5292,6 +5337,14 @@ module.exports = require("os");
 
 "use strict";
 module.exports = require("path");
+
+/***/ }),
+
+/***/ 7282:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("process");
 
 /***/ }),
 
