@@ -37,7 +37,17 @@ export async function run(): Promise<void> {
     if (match) {
       const filename = match.groups?.[1]
       if (filename && fs.existsSync(filename)) {
-        patterns = await fs.promises.readFile(filename, { encoding: 'utf-8' })
+        const patternFile = await fs.promises.readFile(filename, {
+          encoding: 'utf-8'
+        })
+        const filePatterns: string[] = []
+        for (let patternLine of patternFile.replace(/\r/g, '').split('\n')) {
+          patternLine = patternLine.trim()
+          if (!patternLine || patternLine.startsWith('#')) continue
+          core.debug(`Adding ${patternLine} from ${filename}`)
+          filePatterns.push(patternLine)
+        }
+        patterns = filePatterns.join('\n')
         core.debug(`Loaded patterns from file ${filename}`)
       }
     }
@@ -45,9 +55,9 @@ export async function run(): Promise<void> {
       const ignores = await fs.promises.readFile('.gitignore', {
         encoding: 'utf-8'
       })
-      const commentRe = /^\s*#/
-      for (const ignoreLine of ignores.replace(/\r/g, '').split('\n')) {
-        if (commentRe.test(ignoreLine)) continue
+      for (let ignoreLine of ignores.replace(/\r/g, '').split('\n')) {
+        ignoreLine = ignoreLine.trim()
+        if (!ignoreLine || ignoreLine.startsWith('#')) continue
         core.debug(`Adding !${ignoreLine} from .gitignore`)
         patterns += `\n!${ignoreLine}`
       }
