@@ -9,13 +9,10 @@ branding:
 
 # Define your inputs here.
 inputs:
-  include-files:
+  file-patterns:
     description: 'What files to include in the manifest'
     default: '**'
-  exclude-files:
-    description: 'What files to exclude from the manifest, even if they'
-    required: false
-  follow-symlinks:
+  follow-symbolic-links:
     description: 'Whether to follow symlinks when creating the manifest'
     default: true
   manifest-path:
