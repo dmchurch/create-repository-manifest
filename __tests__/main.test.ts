@@ -24,68 +24,98 @@ let getBooleanInputMock: jest.SpiedFunction<typeof core.getBooleanInput>
 let setFailedMock: jest.SpiedFunction<typeof core.setFailed>
 // let setOutputMock: jest.SpiedFunction<typeof core.setOutput>
 let globCreateMock: jest.SpiedFunction<typeof glob.create>
+let globGeneratorMock: jest.SpiedFunction<glob.Globber['globGenerator']>
+
+const globGeneratorResults: string[] = []
 
 // mock native calls
 let existsSyncMock: jest.SpiedFunction<typeof fs.existsSync>
 let writeFileMock: jest.SpiedFunction<typeof fs.promises.writeFile>
+let readFileMock: jest.SpiedFunction<typeof fs.promises.readFile>
 jest.mock('fs', () => ({
   existsSync: jest.fn().mockName('existsSync').mockImplementation(),
   promises: {
     writeFile: jest
       .fn()
       .mockName('promises.writeFile')
-      .mockResolvedValue(undefined)
+      .mockResolvedValue(undefined),
+    readFile: jest.fn().mockName('promises.readFile').mockResolvedValue('')
   }
 }))
+
+const defaultStringInputs: Record<string, string> = {
+  'file-patterns': '**',
+  'manifest-path': 'repository-manifest.json',
+  'summary-path': ''
+}
+const defaultBooleanInputs: Record<string, boolean> = {
+  'follow-symbolic-links': true,
+  'use-gitignore': true,
+  minify: true
+}
+
+let stringInputs: typeof defaultStringInputs
+let booleanInputs: typeof defaultBooleanInputs
 
 describe('action', () => {
   beforeEach(() => {
     jest.clearAllMocks()
 
+    stringInputs = { ...defaultStringInputs }
+    booleanInputs = { ...defaultBooleanInputs }
+    globGeneratorResults.length = 0
+
     debugMock = jest.spyOn(core, 'debug').mockImplementation()
     errorMock = jest.spyOn(core, 'error').mockImplementation()
-    getInputMock = jest.spyOn(core, 'getInput').mockImplementation()
+    getInputMock = jest
+      .spyOn(core, 'getInput')
+      .mockImplementation(name => stringInputs[name] ?? '')
     getBooleanInputMock = jest
       .spyOn(core, 'getBooleanInput')
-      .mockImplementation()
+      .mockImplementation(name => booleanInputs[name] ?? false)
     setFailedMock = jest.spyOn(core, 'setFailed').mockImplementation()
     // setOutputMock = jest.spyOn(core, 'setOutput').mockImplementation()
-    globCreateMock = jest.spyOn(glob, 'create').mockImplementation()
-    existsSyncMock = fs.existsSync as unknown as typeof existsSyncMock
-    writeFileMock = fs.promises.writeFile as unknown as typeof writeFileMock
-  })
 
-  it('runs without failure', async () => {
-    // Set the action's inputs as return values from core.get*Input()
-    const stringInputs: Record<string, string> = {
-      'file-patterns': '**glob',
-      'manifest-path': 'mockManifest',
-      'summary-path': ''
-    }
-    const booleanInputs: Record<string, boolean> = {
-      'follow-symbolic-links': true,
-      'use-gitignore': false,
-      minify: true
-    }
-    getInputMock.mockImplementation(name => stringInputs[name] ?? '')
-    getBooleanInputMock.mockImplementation(name => booleanInputs[name] ?? false)
-    existsSyncMock.mockReturnValue(false)
-
-    const globGeneratorMock = jest.fn(async function* globGenerator() {
-      yield `${process.cwd()}/mock`
+    globGeneratorMock = jest.fn(async function* globGenerator() {
+      const cwd = process.cwd()
+      for (const file of globGeneratorResults) {
+        yield `${cwd}/${file}`
+      }
     })
-
-    globCreateMock.mockImplementation(
+    globCreateMock = jest.spyOn(glob, 'create').mockImplementation(
       async () =>
         ({
           globGenerator: globGeneratorMock
         }) as unknown as glob.Globber
     )
 
+    existsSyncMock = fs.existsSync as unknown as typeof existsSyncMock
+    writeFileMock = fs.promises.writeFile as unknown as typeof writeFileMock
+    readFileMock = fs.promises.readFile as unknown as typeof readFileMock
+  })
+
+  it('runs without failure', async () => {
+    // Set the action's inputs as return values from core.get*Input()
+    stringInputs = {
+      'file-patterns': '**glob',
+      'manifest-path': 'mockManifest',
+      'summary-path': ''
+    }
+    booleanInputs = {
+      'follow-symbolic-links': true,
+      'use-gitignore': false,
+      minify: true
+    }
+    existsSyncMock.mockReturnValue(false)
+
+    globGeneratorResults.push('mock')
+
     await main.run()
     expect(runMock).toHaveReturned()
 
     // Verify that all of the core library functions were called correctly
+    expect(getInputMock).toHaveBeenCalled()
+    expect(getBooleanInputMock).toHaveBeenCalled()
     expect(globCreateMock).toHaveBeenCalledWith('**glob', {
       followSymbolicLinks: true
     })
@@ -101,7 +131,68 @@ describe('action', () => {
       '{"files":{"mock":null}}',
       { encoding: 'utf-8' }
     )
+
+    expect(existsSyncMock).not.toHaveBeenCalled()
     expect(errorMock).not.toHaveBeenCalled()
     expect(setFailedMock).not.toHaveBeenCalled()
+  })
+
+  it('removes a leading / from manifestPath and summaryPath', async () => {
+    stringInputs['manifest-path'] = '/test-manifest'
+    stringInputs['summary-path'] = '/test-summary'
+
+    booleanInputs['use-gitignore'] = false
+
+    await main.run()
+    expect(runMock).toHaveReturned()
+    expect(writeFileMock).toHaveBeenCalledWith(
+      'test-manifest',
+      '{"files":{}}',
+      { encoding: 'utf-8' }
+    )
+  })
+
+  it('reads patterns from files in the repository', async () => {
+    stringInputs['file-patterns'] = '@test-patterns'
+
+    existsSyncMock.mockReturnValue(true)
+    readFileMock
+      .mockResolvedValueOnce('file1\n\nfile2\n')
+      .mockResolvedValueOnce('ignore1\n#comment\nignore2')
+
+    await main.run()
+    expect(runMock).toHaveReturned()
+
+    expect(existsSyncMock).toHaveBeenNthCalledWith(1, 'test-patterns')
+    expect(existsSyncMock).toHaveBeenNthCalledWith(2, '.gitignore')
+
+    expect(globCreateMock).toHaveBeenCalledWith(
+      'file1\nfile2\n!ignore1\n!ignore2',
+      {
+        followSymbolicLinks: true
+      }
+    )
+  })
+
+  it('prints prettily when asked', async () => {
+    booleanInputs['minify'] = false
+
+    await main.run()
+    expect(runMock).toHaveReturned()
+
+    expect(writeFileMock).toHaveBeenCalledWith(
+      'repository-manifest.json',
+      '{\n    "files": {}\n}',
+      { encoding: 'utf-8' }
+    )
+  })
+  it('fails on error', async () => {
+    globCreateMock.mockImplementation(() => {
+      throw new Error('Mock error')
+    })
+
+    await main.run()
+    expect(runMock).toHaveReturned()
+    expect(setFailedMock).toHaveBeenCalled()
   })
 })

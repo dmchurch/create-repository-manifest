@@ -5226,9 +5226,9 @@ async function run() {
             followSymbolicLinks: input.followSymbolicLinks
         };
         let patterns = input.filePatterns;
-        const match = /^@((?:\.\/)?(?:[^\s/]+\/)*[^\s/]+\/?)\s*$/.exec(patterns);
+        const match = /^@((?:\.\/)?(?:[^\s/]+\/)*[^\s/]+\/?)$/.exec(patterns.trim());
         if (match) {
-            const filename = match.groups?.[1];
+            const filename = match[1];
             if (filename && fs.existsSync(filename)) {
                 const patternFile = await fs.promises.readFile(filename, {
                     encoding: 'utf-8'
