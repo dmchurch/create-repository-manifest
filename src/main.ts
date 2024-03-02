@@ -29,6 +29,7 @@ export async function run(): Promise<void> {
     }
 
     const globOptions: glob.GlobOptions = {
+      matchDirectories: false,
       followSymbolicLinks: input.followSymbolicLinks
     }
 
@@ -67,7 +68,11 @@ export async function run(): Promise<void> {
     const base = process.cwd()
     const files: Record<string, string | null> = {}
     for await (const file of globber.globGenerator()) {
-      const relFile = path.relative(base, file)
+      const relFile = path.posix.relative(base, file)
+      if (relFile.startsWith(`.git/`)) {
+        // never record anything in the .git directory
+        continue
+      }
       core.debug(`Got file: ${relFile}`)
       files[relFile] = null
     }

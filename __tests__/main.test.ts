@@ -117,6 +117,7 @@ describe('action', () => {
     expect(getInputMock).toHaveBeenCalled()
     expect(getBooleanInputMock).toHaveBeenCalled()
     expect(globCreateMock).toHaveBeenCalledWith('**glob', {
+      matchDirectories: false,
       followSymbolicLinks: true
     })
     expect(globGeneratorMock).toHaveBeenCalled()
@@ -133,6 +134,24 @@ describe('action', () => {
     )
 
     expect(existsSyncMock).not.toHaveBeenCalled()
+    expect(errorMock).not.toHaveBeenCalled()
+    expect(setFailedMock).not.toHaveBeenCalled()
+  })
+
+  it('ignores files under .git/', async () => {
+    existsSyncMock.mockReturnValue(false)
+
+    globGeneratorResults.push('file1', '.git/file2', 'dir/file3')
+
+    await main.run()
+    expect(runMock).toHaveReturned()
+
+    expect(writeFileMock).toHaveBeenCalledWith(
+      'repository-manifest.json',
+      '{"files":{"file1":null,"dir/file3":null}}',
+      { encoding: 'utf-8' }
+    )
+
     expect(errorMock).not.toHaveBeenCalled()
     expect(setFailedMock).not.toHaveBeenCalled()
   })
@@ -169,6 +188,7 @@ describe('action', () => {
     expect(globCreateMock).toHaveBeenCalledWith(
       'file1\nfile2\n!ignore1\n!ignore2',
       {
+        matchDirectories: false,
         followSymbolicLinks: true
       }
     )

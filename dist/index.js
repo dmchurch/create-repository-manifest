@@ -5223,6 +5223,7 @@ async function run() {
             input.summaryPath = input.summaryPath.slice(1);
         }
         const globOptions = {
+            matchDirectories: false,
             followSymbolicLinks: input.followSymbolicLinks
         };
         let patterns = input.filePatterns;
@@ -5261,7 +5262,11 @@ async function run() {
         const base = process.cwd();
         const files = {};
         for await (const file of globber.globGenerator()) {
-            const relFile = path.relative(base, file);
+            const relFile = path.posix.relative(base, file);
+            if (relFile.startsWith(`.git/`)) {
+                // never record anything in the .git directory
+                continue;
+            }
             core.debug(`Got file: ${relFile}`);
             files[relFile] = null;
         }
