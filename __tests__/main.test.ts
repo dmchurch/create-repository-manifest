@@ -27,6 +27,7 @@ let globCreateMock: jest.SpiedFunction<typeof glob.create>
 let globGeneratorMock: jest.SpiedFunction<glob.Globber['globGenerator']>
 
 const globGeneratorResults: string[] = []
+let readFileResults: Record<string, string> = {}
 
 // mock native calls
 let existsSyncMock: jest.SpiedFunction<typeof fs.existsSync>
@@ -39,7 +40,14 @@ jest.mock('fs', () => ({
       .fn()
       .mockName('promises.writeFile')
       .mockResolvedValue(undefined),
-    readFile: jest.fn().mockName('promises.readFile').mockResolvedValue('')
+    readFile: jest
+      .fn<unknown, Parameters<typeof fs.promises.readFile>>()
+      .mockName('promises.readFile')
+      .mockImplementation((path, options) => {
+        const result =
+          String(path) in readFileResults ? readFileResults[String(path)] : ''
+        return options ? result : Buffer.from(result)
+      })
   }
 }))
 
@@ -64,6 +72,7 @@ describe('action', () => {
     stringInputs = { ...defaultStringInputs }
     booleanInputs = { ...defaultBooleanInputs }
     globGeneratorResults.length = 0
+    readFileResults = {}
 
     debugMock = jest.spyOn(core, 'debug').mockImplementation()
     errorMock = jest.spyOn(core, 'error').mockImplementation()
@@ -130,7 +139,7 @@ describe('action', () => {
     )
     expect(writeFileMock).toHaveBeenCalledWith(
       'mockManifest',
-      '{"files":{"mock":null}}',
+      '{"files":{"mock":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}}',
       { encoding: 'utf-8' }
     )
 
@@ -149,7 +158,7 @@ describe('action', () => {
 
     expect(writeFileMock).toHaveBeenCalledWith(
       'repository-manifest.json',
-      '{"files":{"file1":null,"dir/file3":null}}',
+      '{"files":{"file1":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","dir/file3":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}}',
       { encoding: 'utf-8' }
     )
 
@@ -165,6 +174,7 @@ describe('action', () => {
 
     await main.run()
     expect(runMock).toHaveReturned()
+    expect(setFailedMock).not.toHaveBeenCalled()
     expect(writeFileMock).toHaveBeenCalledWith(
       'test-manifest',
       '{"files":{}}',
@@ -176,12 +186,12 @@ describe('action', () => {
     stringInputs['file-patterns'] = '@test-patterns'
 
     existsSyncMock.mockReturnValue(true)
-    readFileMock
-      .mockResolvedValueOnce('file1\n\nfile2\n')
-      .mockResolvedValueOnce('ignore1\n#comment\nignore2')
+    readFileResults['test-patterns'] = 'file1\n\nfile2\n'
+    readFileResults['.gitignore'] = 'ignore1\n#comment\nignore2'
 
     await main.run()
     expect(runMock).toHaveReturned()
+    expect(setFailedMock).not.toHaveBeenCalled()
 
     expect(existsSyncMock).toHaveBeenNthCalledWith(1, '.gitignore')
 
@@ -199,6 +209,7 @@ describe('action', () => {
 
     await main.run()
     expect(runMock).toHaveReturned()
+    expect(setFailedMock).not.toHaveBeenCalled()
 
     expect(writeFileMock).toHaveBeenCalledWith(
       'repository-manifest.json',
@@ -206,7 +217,7 @@ describe('action', () => {
       { encoding: 'utf-8' }
     )
   })
-  it('fails on error', async () => {
+  it('fails cleanly on error', async () => {
     globCreateMock.mockImplementation(() => {
       throw new Error('Mock error')
     })

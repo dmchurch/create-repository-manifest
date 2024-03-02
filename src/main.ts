@@ -4,6 +4,7 @@ import * as glob from '@actions/glob'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as process from 'process'
+import * as Crypto from 'node:crypto'
 
 async function parsePatterns(
   patterns: string[],
@@ -31,6 +32,12 @@ async function parsePatterns(
     core.debug(`Adding ${patternLine} from ${source}`)
     patterns.push(patternLine)
   }
+}
+
+async function getChecksum(filepath: string): Promise<string> {
+  const fileContent = await fs.promises.readFile(filepath)
+  const digest = await Crypto.subtle.digest('SHA-256', fileContent)
+  return Buffer.from(digest).toString('hex')
 }
 
 /**
@@ -80,7 +87,7 @@ export async function run(): Promise<void> {
         continue
       }
       core.debug(`Got file: ${relFile}`)
-      files[relFile] = null
+      files[relFile] = await getChecksum(file)
     }
 
     core.debug(

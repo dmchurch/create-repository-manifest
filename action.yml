@@ -1,5 +1,5 @@
 name: 'Create Repository Manifest'
-description: 'Creates a JSON manifest of all files in the repository along with the most recent commit SHA that modified them.'
+description: 'Creates a JSON manifest of all files in the repository along with their current checksums.'
 author: 'Danielle Church'
 
 # Add your action's branding here. This will appear on the GitHub Marketplace.

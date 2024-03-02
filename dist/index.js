@@ -5202,6 +5202,7 @@ const glob = __importStar(__nccwpck_require__(8090));
 const fs = __importStar(__nccwpck_require__(7147));
 const path = __importStar(__nccwpck_require__(1017));
 const process = __importStar(__nccwpck_require__(7282));
+const Crypto = __importStar(__nccwpck_require__(6005));
 async function parsePatterns(patterns, source, patternInput, allowIncludes = true, invert = false) {
     for (let patternLine of patternInput.trim().replace(/\r/g, '').split('\n')) {
         patternLine = patternLine.trim();
@@ -5224,6 +5225,11 @@ async function parsePatterns(patterns, source, patternInput, allowIncludes = tru
         core.debug(`Adding ${patternLine} from ${source}`);
         patterns.push(patternLine);
     }
+}
+async function getChecksum(filepath) {
+    const fileContent = await fs.promises.readFile(filepath);
+    const digest = await Crypto.subtle.digest('SHA-256', fileContent);
+    return Buffer.from(digest).toString('hex');
 }
 /**
  * The main function for the action.
@@ -5264,7 +5270,7 @@ async function run() {
                 continue;
             }
             core.debug(`Got file: ${relFile}`);
-            files[relFile] = null;
+            files[relFile] = await getChecksum(file);
         }
         core.debug(`Found ${Object.keys(files).length} files, writing to ${input.manifestPath}`);
         await fs.promises.writeFile(input.manifestPath, JSON.stringify({ files }, null, input.minify ? undefined : 4), { encoding: 'utf-8' });
@@ -5333,6 +5339,14 @@ module.exports = require("https");
 
 "use strict";
 module.exports = require("net");
+
+/***/ }),
+
+/***/ 6005:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("node:crypto");
 
 /***/ }),
 
