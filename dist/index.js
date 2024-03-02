@@ -5202,6 +5202,29 @@ const glob = __importStar(__nccwpck_require__(8090));
 const fs = __importStar(__nccwpck_require__(7147));
 const path = __importStar(__nccwpck_require__(1017));
 const process = __importStar(__nccwpck_require__(7282));
+async function parsePatterns(patterns, source, patternInput, allowIncludes = true, invert = false) {
+    for (let patternLine of patternInput.trim().replace(/\r/g, '').split('\n')) {
+        patternLine = patternLine.trim();
+        if (!patternLine || patternLine.startsWith('#'))
+            continue;
+        const patternMatch = /^(!?)(@?)\s*(.+)$/.exec(patternLine);
+        if (allowIncludes && patternMatch?.[2]) {
+            const invertInclude = patternMatch[1] === '!';
+            const filename = patternMatch[3];
+            core.debug(`Parsing patterns from file ${filename}`);
+            const fileContent = await fs.promises.readFile(filename, {
+                encoding: 'utf-8'
+            });
+            await parsePatterns(patterns, filename, fileContent, false, invertInclude);
+            core.debug(`Loaded patterns from file ${filename}`);
+            continue;
+        }
+        if (invert)
+            patternLine = `!${patternLine}`;
+        core.debug(`Adding ${patternLine} from ${source}`);
+        patterns.push(patternLine);
+    }
+}
 /**
  * The main function for the action.
  * @returns {Promise<void>} Resolves when the action is complete.
@@ -5226,39 +5249,12 @@ async function run() {
             matchDirectories: false,
             followSymbolicLinks: input.followSymbolicLinks
         };
-        let patterns = input.filePatterns;
-        const match = /^@((?:\.\/)?(?:[^\s/]+\/)*[^\s/]+\/?)$/.exec(patterns.trim());
-        if (match) {
-            const filename = match[1];
-            if (filename && fs.existsSync(filename)) {
-                const patternFile = await fs.promises.readFile(filename, {
-                    encoding: 'utf-8'
-                });
-                const filePatterns = [];
-                for (let patternLine of patternFile.replace(/\r/g, '').split('\n')) {
-                    patternLine = patternLine.trim();
-                    if (!patternLine || patternLine.startsWith('#'))
-                        continue;
-                    core.debug(`Adding ${patternLine} from ${filename}`);
-                    filePatterns.push(patternLine);
-                }
-                patterns = filePatterns.join('\n');
-                core.debug(`Loaded patterns from file ${filename}`);
-            }
-        }
+        const patterns = [];
+        await parsePatterns(patterns, '<input>', input.filePatterns);
         if (input.useGitignore && fs.existsSync('.gitignore')) {
-            const ignores = await fs.promises.readFile('.gitignore', {
-                encoding: 'utf-8'
-            });
-            for (let ignoreLine of ignores.replace(/\r/g, '').split('\n')) {
-                ignoreLine = ignoreLine.trim();
-                if (!ignoreLine || ignoreLine.startsWith('#'))
-                    continue;
-                core.debug(`Adding !${ignoreLine} from .gitignore`);
-                patterns += `\n!${ignoreLine}`;
-            }
+            await parsePatterns(patterns, '<gitignore>', '!@.gitignore');
         }
-        const globber = await glob.create(patterns, globOptions);
+        const globber = await glob.create(patterns.join('\n'), globOptions);
         const base = process.cwd();
         const files = {};
         for await (const file of globber.globGenerator()) {

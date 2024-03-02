@@ -122,9 +122,10 @@ describe('action', () => {
     })
     expect(globGeneratorMock).toHaveBeenCalled()
 
-    expect(debugMock).toHaveBeenNthCalledWith(1, 'Got file: mock')
+    expect(debugMock).toHaveBeenNthCalledWith(1, 'Adding **glob from <input>')
+    expect(debugMock).toHaveBeenNthCalledWith(2, 'Got file: mock')
     expect(debugMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       'Found 1 files, writing to mockManifest'
     )
     expect(writeFileMock).toHaveBeenCalledWith(
@@ -182,8 +183,7 @@ describe('action', () => {
     await main.run()
     expect(runMock).toHaveReturned()
 
-    expect(existsSyncMock).toHaveBeenNthCalledWith(1, 'test-patterns')
-    expect(existsSyncMock).toHaveBeenNthCalledWith(2, '.gitignore')
+    expect(existsSyncMock).toHaveBeenNthCalledWith(1, '.gitignore')
 
     expect(globCreateMock).toHaveBeenCalledWith(
       'file1\nfile2\n!ignore1\n!ignore2',
